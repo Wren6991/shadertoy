@@ -26,6 +26,8 @@
 #include <wx/timer.h>
 //*)
 
+#include "bsm.h"
+
 class shadertoyFrame: public wxFrame
 {
     public:
@@ -60,6 +62,8 @@ class shadertoyFrame: public wxFrame
         int texturex, texturey;
         void drawtexture();
 
+        int ntriangles;
+
     private:
 
         //(*Handlers(shadertoyFrame)
@@ -72,6 +76,8 @@ class shadertoyFrame: public wxFrame
         void OnGLCanvas1Resize(wxSizeEvent& event);
         void OnGLCanvas2Resize(wxSizeEvent& event);
         void OnbtnBrowseTextureClick(wxCommandEvent& event);
+        void OnButton1Click(wxCommandEvent& event);
+        void OnbtnLoadModelClick(wxCommandEvent& event);
         //*)
 
         void initgl();
@@ -86,6 +92,7 @@ class shadertoyFrame: public wxFrame
         static const long ID_GLCANVAS2;
         static const long ID_BUTTON2;
         static const long ID_PANEL1;
+        static const long ID_BUTTON3;
         static const long ID_NOTEBOOK1;
         static const long ID_BUTTON1;
         static const long ID_TIMER1;
@@ -98,10 +105,12 @@ class shadertoyFrame: public wxFrame
         wxGLCanvas* GLCanvas1;
         wxButton* btnBrowseTexture;
         wxPanel* Panel1;
+        wxFileDialog* ModelFileDialog;
         wxGLCanvas* GLCanvas2;
         wxListBox* lstTextures;
         wxStopWatch StopWatch1;
         wxTextCtrl* txtError;
+        wxButton* btnLoadModel;
         wxTextCtrl* txtFShader;
         wxFileDialog* TextureFileDialog;
         wxTimer Timer1;

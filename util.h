@@ -8,6 +8,7 @@ struct vert
     float u, v;             //32 byte aligned :D
 };
 
+
 struct texture
 {
     void *data;

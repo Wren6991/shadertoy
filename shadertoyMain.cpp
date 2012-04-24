@@ -7,9 +7,13 @@
  * License:
  **************************************************************/
 
-#include "shadertoyMain.h"
 #include <wx/msgdlg.h>
+#include <iostream>
+#include <fstream>
+
+#include "shadertoyMain.h"
 #include "util.h"
+#include "bsm.h"
 
 //(*InternalHeaders(shadertoyFrame)
 #include <wx/settings.h>
@@ -27,7 +31,7 @@ GLfloat quaddata[32] = {                                  // pos, normal, texcoo
      1.0, -1.0, -1.0,   0.0, 0.0, 1.0,   1.0, 0.0
 };
 
-GLushort quadindex[6] = {0, 1, 2, 0, 2, 3};
+GLuint quadindex[6] = {0, 1, 2, 0, 2, 3};
 
 //helper functions
 enum wxbuildinfoformat {
@@ -64,6 +68,7 @@ const long shadertoyFrame::ID_LISTBOX1 = wxNewId();
 const long shadertoyFrame::ID_GLCANVAS2 = wxNewId();
 const long shadertoyFrame::ID_BUTTON2 = wxNewId();
 const long shadertoyFrame::ID_PANEL1 = wxNewId();
+const long shadertoyFrame::ID_BUTTON3 = wxNewId();
 const long shadertoyFrame::ID_NOTEBOOK1 = wxNewId();
 const long shadertoyFrame::ID_BUTTON1 = wxNewId();
 const long shadertoyFrame::ID_TIMER1 = wxNewId();
@@ -129,10 +134,12 @@ shadertoyFrame::shadertoyFrame(wxWindow* parent,wxWindowID id)
     Panel1->SetSizer(BoxSizer3);
     BoxSizer3->Fit(Panel1);
     BoxSizer3->SetSizeHints(Panel1);
+    btnLoadModel = new wxButton(Notebook1, ID_BUTTON3, _("Load Model"), wxPoint(345,12), wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON3"));
     Notebook1->AddPage(txtVShader, _("Vertex Shader"), false);
     Notebook1->AddPage(txtFShader, _("Fragment Shader"), true);
     Notebook1->AddPage(txtError, _("Errors"), false);
     Notebook1->AddPage(Panel1, _("Textures"), false);
+    Notebook1->AddPage(btnLoadModel, _("Model"), false);
     BoxSizer2->Add(Notebook1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     btnCompile = new wxButton(this, ID_BUTTON1, _("Compile Shaders"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON1"));
     BoxSizer2->Add(btnCompile, 0, wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -141,6 +148,7 @@ shadertoyFrame::shadertoyFrame(wxWindow* parent,wxWindowID id)
     Timer1.SetOwner(this, ID_TIMER1);
     Timer1.Start(10, false);
     TextureFileDialog = new wxFileDialog(this, _("Select texture file"), wxEmptyString, wxEmptyString, _("TGA file (*.tga)|*.tga"), wxFD_OPEN|wxFD_FILE_MUST_EXIST, wxDefaultPosition, wxDefaultSize, _T("wxFileDialog"));
+    ModelFileDialog = new wxFileDialog(this, _("Select model file"), wxEmptyString, wxEmptyString, _("Binary static mesh (*.bsm)|*.bsm|All files (*.*)|*.*"), wxFD_DEFAULT_STYLE, wxDefaultPosition, wxDefaultSize, _T("wxFileDialog"));
     BoxSizer1->Fit(this);
     BoxSizer1->SetSizeHints(this);
 
@@ -148,6 +156,7 @@ shadertoyFrame::shadertoyFrame(wxWindow* parent,wxWindowID id)
     GLCanvas1->Connect(wxEVT_SIZE,(wxObjectEventFunction)&shadertoyFrame::OnGLCanvas1Resize,0,this);
     GLCanvas2->Connect(wxEVT_SIZE,(wxObjectEventFunction)&shadertoyFrame::OnGLCanvas2Resize,0,this);
     Connect(ID_BUTTON2,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&shadertoyFrame::OnbtnBrowseTextureClick);
+    Connect(ID_BUTTON3,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&shadertoyFrame::OnbtnLoadModelClick);
     Connect(ID_NOTEBOOK1,wxEVT_COMMAND_NOTEBOOK_PAGE_CHANGED,(wxObjectEventFunction)&shadertoyFrame::OnNotebook1PageChanged);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&shadertoyFrame::OnbtnCompileClick);
     Connect(ID_TIMER1,wxEVT_TIMER,(wxObjectEventFunction)&shadertoyFrame::OnTimer1Trigger);
@@ -200,7 +209,7 @@ shadertoyFrame::shadertoyFrame(wxWindow* parent,wxWindowID id)
 
     glGenBuffers(1, &resources.ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, resources.ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(GLushort), quadindex, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(GLuint), quadindex, GL_STATIC_DRAW);
 
     TextureContext->SetCurrent(*GLCanvas2);
 
@@ -214,6 +223,8 @@ shadertoyFrame::shadertoyFrame(wxWindow* parent,wxWindowID id)
 
     texturex = GLCanvas2->GetSize().GetX();
     texturey = GLCanvas2->GetSize().GetY();
+
+    ntriangles = 2;
 
     StopWatch1.Start(0);
 }
@@ -242,16 +253,16 @@ void shadertoyFrame::OnNotebook1PageChanged(wxNotebookEvent& event)
 void shadertoyFrame::initgl()
 {
     GLContext->SetCurrent(*GLCanvas1);
-    glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClearDepth(1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glDepthFunc(GL_LEQUAL);
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glFrustum(-1.0, 1.0, -1.0, 1.0, 1.0, 1000.0);
+    glFrustum(-1.0, 1.0, -1.0, 1.0, 1.0, 100.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
@@ -296,7 +307,7 @@ void shadertoyFrame::OnGLCanvas1Paint(wxPaintEvent& event)
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, resources.ibo);
 
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, BUFFER_OFFSET(0));
+    glDrawElements(GL_TRIANGLES, 3 * ntriangles, GL_UNSIGNED_INT, BUFFER_OFFSET(0));
 
 
     glUseProgram(0);
@@ -397,4 +408,78 @@ void shadertoyFrame::OnbtnBrowseTextureClick(wxCommandEvent& event)
         TextureContext->SetCurrent(*GLCanvas2);
         resources.texdialog.textures[lstTextures->GetSelection()] = makeTexture(filename);
     }
+}
+
+void shadertoyFrame::OnbtnLoadModelClick(wxCommandEvent& event)
+{
+    if (ModelFileDialog->ShowModal() != wxID_OK)
+        return;
+
+    wxString filename = ModelFileDialog->GetPath();
+    std::cout << filename << "\n";
+    std::fstream file(filename, std::ios::in | std::ios::binary);
+
+    file.seekg(0, std::ios::end);
+    int length = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::cout << "File size: " << length << " bytes\n";
+
+    uint8_t *buffer = new uint8_t[length];
+    file.read((char*)buffer, length);
+
+    bsm_header_v1_t *header = new bsm_header_v1_t;
+
+    if (!bsm_read_header_v1((uint8_t*)buffer, length, header))
+    {
+        wxMessageDialog(this, "Error: \"" + filename + "\" is not a binary static mesh.", "Error", wxICON_ERROR | wxOK).ShowModal();
+    }
+    std::cout << "Num. tris: " << header->num_tris << "\n";
+
+    ntriangles = header->num_tris;
+
+    int nverts = bsm_positions_bytes(header) / 12;
+
+    GLfloat *positions = new GLfloat[nverts * 3];
+    GLfloat *normals = new GLfloat[nverts * 3];
+    GLfloat *texcoords = new GLfloat[nverts * 2];
+
+    bsm_read_positions(buffer, length, header, (bsm_position*)positions);
+    bsm_read_normals(buffer, length, header, (bsm_normal*)normals);
+    bsm_read_texcoords(buffer, length, header, (bsm_texcoord*)texcoords);
+
+    std::cout << bsm_positions_bytes(header) << " " << bsm_texcoords_bytes(header) << "\n";
+
+    GLfloat *vbuffer = new GLfloat[nverts * 8];
+
+    int stride = 8;
+    // pack vertex attributes into vertex buffer
+
+    for (int i = 0; i < nverts; i++)
+    {
+        vbuffer[i * stride + 0] = positions[i * 3 + 0];
+        vbuffer[i * stride + 1] = positions[i * 3 + 1];
+        vbuffer[i * stride + 2] = positions[i * 3 + 2];
+        vbuffer[i * stride + 3] = normals[i * 3 + 0];
+        vbuffer[i * stride + 4] = normals[i * 3 + 1];
+        vbuffer[i * stride + 5] = normals[i * 3 + 2];
+        vbuffer[i * stride + 6] = texcoords[i * 2 + 0];
+        vbuffer[i * stride + 7] = texcoords[i * 2 + 1];
+    }
+
+    GLuint *ibuffer = new GLuint[header->num_tris * 3];
+    bsm_read_tris(buffer, length, header, (bsm_triangle*)ibuffer);
+
+    glDeleteBuffers(1, &resources.vbo);
+
+    glGenBuffers(1, &resources.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, resources.vbo);
+    glBufferData(GL_ARRAY_BUFFER, nverts * 8 * sizeof(GLfloat), vbuffer, GL_STATIC_DRAW);
+
+    glDeleteBuffers(1, &resources.ibo);
+
+    glGenBuffers(1, &resources.ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, resources.ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, header->num_tris * 3 * sizeof(GLuint), ibuffer, GL_STATIC_DRAW);
+
 }
